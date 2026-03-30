@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gzim-dashboard-v1';
+const CACHE_NAME = 'gzim-dashboard-v2';
 const ASSETS = [
     './',
     './index.html',
@@ -9,7 +9,7 @@ const ASSETS = [
     './icons/icon-512.svg'
 ];
 
-// Install — cache core assets
+// Install — cache core assets for offline fallback
 self.addEventListener('install', e => {
     e.waitUntil(
         caches.open(CACHE_NAME)
@@ -27,16 +27,25 @@ self.addEventListener('activate', e => {
     );
 });
 
-// Fetch — serve from cache, fall back to network
+// Fetch — NETWORK FIRST, fall back to cache only when offline
 self.addEventListener('fetch', e => {
+    // Never cache API calls
+    if (e.request.url.includes('/api/')) {
+        e.respondWith(fetch(e.request));
+        return;
+    }
+
     e.respondWith(
-        caches.match(e.request).then(cached => {
-            const fetched = fetch(e.request).then(response => {
+        fetch(e.request)
+            .then(response => {
+                // Update cache with fresh version
                 const clone = response.clone();
                 caches.open(CACHE_NAME).then(cache => cache.put(e.request, clone));
                 return response;
-            }).catch(() => cached);
-            return cached || fetched;
-        })
+            })
+            .catch(() => {
+                // Offline — serve from cache
+                return caches.match(e.request);
+            })
     );
 });
