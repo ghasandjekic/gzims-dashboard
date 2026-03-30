@@ -872,6 +872,42 @@ form {
     }
 }
 
+/* ===== SYNC INDICATOR ===== */
+.sync-indicator {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.sync-indicator.synced {
+    background: rgba(46, 204, 113, 0.15);
+    color: #2ecc71;
+}
+
+.sync-indicator.offline {
+    background: rgba(231, 76, 60, 0.15);
+    color: #e74c3c;
+}
+
+.sync-indicator.local {
+    background: rgba(160, 174, 192, 0.15);
+    color: #a0aec0;
+}
+
+.sync-indicator.syncing {
+    background: rgba(79, 143, 247, 0.15);
+    color: #4f8ff7;
+    animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
 /* ===== SCROLLBAR ===== */
 ::-webkit-scrollbar {
     width: 8px;

@@ -1,35 +1,132 @@
-// ===== DATA LAYER =====
+// ===== SYNC & DATA LAYER =====
 const STORAGE_KEY = 'gzim_dashboard_tasks';
 const CLIENTS_KEY = 'gzim_dashboard_clients';
+const SERVER_KEY = 'gzim_dashboard_server';
 const DEFAULT_CLIENTS = ['GPS', 'Josh', 'JMJ', 'WRC Flamur'];
 
-function loadTasks() {
+// Detect if we're running from the local server (not GitHub Pages)
+const API_BASE = (() => {
+    const loc = window.location;
+    // If served from localhost or a local IP, use same origin as API
+    if (loc.hostname === 'localhost' || loc.hostname === '127.0.0.1' || /^192\.168\./.test(loc.hostname) || /^10\./.test(loc.hostname)) {
+        return loc.origin;
+    }
+    // On GitHub Pages: check if user saved a server address
+    const saved = localStorage.getItem(SERVER_KEY);
+    return saved || null;
+})();
+
+let serverOnline = false;
+
+async function apiGet(path) {
+    if (!API_BASE) return null;
+    try {
+        const res = await fetch(API_BASE + path, { signal: AbortSignal.timeout(3000) });
+        if (res.ok) { serverOnline = true; return res.json(); }
+    } catch {}
+    serverOnline = false;
+    return null;
+}
+
+async function apiPost(path, data) {
+    if (!API_BASE) return false;
+    try {
+        const res = await fetch(API_BASE + path, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+            signal: AbortSignal.timeout(3000)
+        });
+        if (res.ok) { serverOnline = true; return true; }
+    } catch {}
+    serverOnline = false;
+    return false;
+}
+
+async function apiPut(path, data) {
+    if (!API_BASE) return false;
+    try {
+        const res = await fetch(API_BASE + path, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+            signal: AbortSignal.timeout(3000)
+        });
+        if (res.ok) { serverOnline = true; return true; }
+    } catch {}
+    serverOnline = false;
+    return false;
+}
+
+async function apiDelete(path) {
+    if (!API_BASE) return false;
+    try {
+        const res = await fetch(API_BASE + path, {
+            method: 'DELETE',
+            signal: AbortSignal.timeout(3000)
+        });
+        if (res.ok) { serverOnline = true; return true; }
+    } catch {}
+    serverOnline = false;
+    return false;
+}
+
+// LocalStorage helpers
+function loadTasksLocal() {
     const data = localStorage.getItem(STORAGE_KEY);
     return data ? JSON.parse(data) : [];
 }
 
-function saveTasks(tasks) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+function saveTasksLocal(t) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(t));
 }
 
-function loadClients() {
+function loadClientsLocal() {
     const data = localStorage.getItem(CLIENTS_KEY);
     if (data) return JSON.parse(data);
-    // First run — seed with defaults
-    saveClients(DEFAULT_CLIENTS);
     return [...DEFAULT_CLIENTS];
 }
 
-function saveClients(clients) {
-    localStorage.setItem(CLIENTS_KEY, JSON.stringify(clients));
+function saveClientsLocal(c) {
+    localStorage.setItem(CLIENTS_KEY, JSON.stringify(c));
+}
+
+// Save tasks — writes to server AND localStorage
+async function saveTasks(t) {
+    saveTasksLocal(t);
+    await apiPost('/api/data', { tasks: t, clients });
+    updateSyncStatus();
+}
+
+// Save clients — writes to server AND localStorage
+async function saveClients(c) {
+    saveClientsLocal(c);
+    await apiPost('/api/clients', { clients: c });
+    updateSyncStatus();
+}
+
+// Sync from server (called on page load / manual refresh)
+async function syncFromServer() {
+    const data = await apiGet('/api/data');
+    if (data) {
+        tasks = data.tasks || [];
+        clients = data.clients || DEFAULT_CLIENTS;
+        saveTasksLocal(tasks);
+        saveClientsLocal(clients);
+        updateSyncStatus();
+        return true;
+    }
+    updateSyncStatus();
+    return false;
 }
 
 function generateId() {
     return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 }
 
-let tasks = loadTasks();
-let clients = loadClients();
+// Load initial data from localStorage (fast), server sync happens after
+let tasks = loadTasksLocal();
+let clients = loadClientsLocal();
 let editingTaskId = null;
 let deletingTaskId = null;
 let currentSort = { field: null, asc: true };
@@ -71,6 +168,7 @@ const filterStatus = document.getElementById('filterStatus');
 const filterPriority = document.getElementById('filterPriority');
 const searchInput = document.getElementById('searchInput');
 const sortableHeaders = document.querySelectorAll('.sortable');
+const syncIndicator = document.getElementById('syncIndicator');
 
 // Form fields
 const taskName = document.getElementById('taskName');
@@ -88,6 +186,21 @@ const summaryOpen = document.getElementById('summaryOpen');
 const summaryOverdue = document.getElementById('summaryOverdue');
 const summaryCompleted = document.getElementById('summaryCompleted');
 
+// ===== SYNC STATUS INDICATOR =====
+function updateSyncStatus() {
+    if (!syncIndicator) return;
+    if (API_BASE && serverOnline) {
+        syncIndicator.textContent = 'Synced';
+        syncIndicator.className = 'sync-indicator synced';
+    } else if (API_BASE) {
+        syncIndicator.textContent = 'Offline';
+        syncIndicator.className = 'sync-indicator offline';
+    } else {
+        syncIndicator.textContent = 'Local';
+        syncIndicator.className = 'sync-indicator local';
+    }
+}
+
 // ===== HELPERS =====
 const ALL_STATUSES = ['To Do', 'In Progress', 'Hold', 'Late', 'Completed'];
 
@@ -100,10 +213,8 @@ function isBusinessDayPastDue(dateStr) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const due = new Date(dateStr + 'T00:00:00');
-    // Check if today is at least the next business day after due date
     let nextBiz = new Date(due);
     nextBiz.setDate(nextBiz.getDate() + 1);
-    // Skip weekends
     while (nextBiz.getDay() === 0 || nextBiz.getDay() === 6) {
         nextBiz.setDate(nextBiz.getDate() + 1);
     }
@@ -226,7 +337,6 @@ function updateFilterOptions() {
     const currentClient = filterClient.value;
     const currentProject = filterProject.value;
 
-    // Merge saved clients with any clients used in tasks
     const taskClients = getUniqueValues('client');
     const allClients = [...new Set([...clients, ...taskClients])].sort();
     const projects = getUniqueValues('project');
@@ -237,9 +347,7 @@ function updateFilterOptions() {
     filterProject.innerHTML = '<option value="">All Projects</option>' +
         projects.map(p => `<option value="${escapeHtml(p)}" ${p === currentProject ? 'selected' : ''}>${escapeHtml(p)}</option>`).join('');
 
-    // Update form client dropdown
     updateClientDropdown();
-    // Update datalist for projects
     projectList.innerHTML = projects.map(p => `<option value="${escapeHtml(p)}">`).join('');
 }
 
@@ -255,7 +363,6 @@ function updateClientDropdown(selectedValue) {
 
 // ===== INLINE EDITING =====
 function startInlineEdit(td, taskId, field) {
-    // Don't start if already editing
     if (td.querySelector('input, select, textarea')) return;
 
     const task = tasks.find(t => t.id === taskId);
@@ -340,7 +447,6 @@ function startInlineEdit(td, taskId, field) {
         const save = () => {
             task[field] = input.value;
             task.updatedAt = new Date().toISOString();
-            // Re-check late status
             if (task.status !== 'Completed' && isBusinessDayPastDue(input.value)) {
                 task.status = 'Late';
             } else if (task.status === 'Late' && !isBusinessDayPastDue(input.value)) {
@@ -373,7 +479,6 @@ function startInlineEdit(td, taskId, field) {
             if (e.key === 'Escape') { renderAll(); }
         });
     } else {
-        // Text fields (task, project)
         const input = document.createElement('input');
         input.type = 'text';
         input.className = 'inline-edit-input';
@@ -381,7 +486,6 @@ function startInlineEdit(td, taskId, field) {
 
         if (field === 'project') {
             input.setAttribute('list', 'inlineProjectList');
-            // Create temp datalist
             let dl = document.getElementById('inlineProjectList');
             if (!dl) {
                 dl = document.createElement('datalist');
@@ -457,7 +561,6 @@ function renderTable() {
         </tr>`;
     }).join('');
 
-    // Attach inline edit listeners
     taskTableBody.querySelectorAll('.editable-cell').forEach(td => {
         td.addEventListener('click', (e) => {
             const tr = td.closest('tr');
@@ -757,6 +860,37 @@ function switchView(view) {
     if (view === 'kanban') renderKanban();
 }
 
+// ===== PULL TO REFRESH =====
+let pullStartY = 0;
+let pulling = false;
+
+document.addEventListener('touchstart', (e) => {
+    if (window.scrollY === 0) {
+        pullStartY = e.touches[0].clientY;
+        pulling = true;
+    }
+}, { passive: true });
+
+document.addEventListener('touchmove', (e) => {
+    if (!pulling) return;
+    const pullDistance = e.touches[0].clientY - pullStartY;
+    if (pullDistance > 80 && window.scrollY === 0) {
+        pulling = false;
+        // Show syncing feedback
+        if (syncIndicator) {
+            syncIndicator.textContent = 'Syncing...';
+            syncIndicator.className = 'sync-indicator syncing';
+        }
+        syncFromServer().then(() => {
+            renderAll();
+        });
+    }
+}, { passive: true });
+
+document.addEventListener('touchend', () => {
+    pulling = false;
+}, { passive: true });
+
 // ===== RENDER ALL =====
 function renderAll() {
     autoDetectLate();
@@ -783,7 +917,6 @@ closeClientsBtn.addEventListener('click', closeClientsModal);
 addClientBtn.addEventListener('click', addNewClient);
 newClientInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addNewClient(); } });
 
-// Open manage clients modal when selecting the option
 taskClient.addEventListener('change', () => {
     if (taskClient.value === '__manage__') {
         taskClient.value = '';
@@ -802,13 +935,11 @@ kanbanGroupBy.addEventListener('change', renderKanban);
 
 sortableHeaders.forEach(th => th.addEventListener('click', handleSort));
 
-// Close modals on overlay click
 taskModal.addEventListener('click', e => { if (e.target === taskModal) closeTaskModal(); });
 deleteModal.addEventListener('click', e => { if (e.target === deleteModal) closeDeleteModal(); });
 notesModal.addEventListener('click', e => { if (e.target === notesModal) closeNotesModal(); });
 clientsModal.addEventListener('click', e => { if (e.target === clientsModal) closeClientsModal(); });
 
-// Keyboard shortcuts
 document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
         closeTaskModal();
@@ -822,7 +953,7 @@ document.addEventListener('keydown', e => {
     }
 });
 
-// ===== DATA MIGRATION: rename "Done" to "Completed" for existing data =====
+// ===== DATA MIGRATION =====
 (function migrateStatuses() {
     let changed = false;
     tasks.forEach(t => {
@@ -832,4 +963,8 @@ document.addEventListener('keydown', e => {
 })();
 
 // ===== INIT =====
+// Render immediately from localStorage, then try server sync
 renderAll();
+syncFromServer().then(synced => {
+    if (synced) renderAll();
+});
