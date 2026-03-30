@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gzim's Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#1a1a2e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Dashboard">
+    <link rel="apple-touch-icon" href="icons/icon-192.svg">
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <h1 class="logo">Gzim's Dashboard</h1>
+            </div>
+            <div class="header-right">
+                <button class="btn btn-primary" id="addTaskBtn">+ New Task</button>
+            </div>
+        </header>
+
+        <!-- Dashboard Summary -->
+        <div class="dashboard-summary" id="dashboardSummary">
+            <div class="summary-card">
+                <span class="summary-number total" id="summaryTotal">0</span>
+                <span class="summary-label">TOTAL TASKS</span>
+            </div>
+            <div class="summary-card">
+                <span class="summary-number open" id="summaryOpen">0</span>
+                <span class="summary-label">OPEN / IN PROGRESS</span>
+            </div>
+            <div class="summary-card">
+                <span class="summary-number overdue" id="summaryOverdue">0</span>
+                <span class="summary-label">OVERDUE</span>
+            </div>
+            <div class="summary-card">
+                <span class="summary-number completed" id="summaryCompleted">0</span>
+                <span class="summary-label">COMPLETED</span>
+            </div>
+        </div>
+
+        <!-- Toolbar -->
+        <div class="toolbar">
+            <div class="toolbar-left">
+                <div class="view-toggle">
+                    <button class="view-btn active" data-view="table">Table</button>
+                    <button class="view-btn" data-view="kanban">Kanban</button>
+                </div>
+            </div>
+            <div class="toolbar-right">
+                <div class="filter-group">
+                    <select id="filterClient" class="filter-select">
+                        <option value="">All Clients</option>
+                    </select>
+                    <select id="filterProject" class="filter-select">
+                        <option value="">All Projects</option>
+                    </select>
+                    <select id="filterStatus" class="filter-select">
+                        <option value="">All Statuses</option>
+                        <option value="To Do">To Do</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="Hold">Hold</option>
+                        <option value="Late">Late</option>
+                        <option value="Completed">Completed</option>
+                    </select>
+                    <select id="filterPriority" class="filter-select">
+                        <option value="">All Priorities</option>
+                        <option value="High">High</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Low">Low</option>
+                    </select>
+                    <input type="text" id="searchInput" class="search-input" placeholder="Search tasks...">
+                </div>
+            </div>
+        </div>
+
+        <!-- Table View -->
+        <div class="view-container" id="tableView">
+            <div class="table-wrapper">
+                <table class="task-table">
+                    <thead>
+                        <tr>
+                            <th class="sortable" data-sort="task">Task <span class="sort-icon"></span></th>
+                            <th class="sortable" data-sort="client">Client <span class="sort-icon"></span></th>
+                            <th class="sortable" data-sort="project">Project <span class="sort-icon"></span></th>
+                            <th class="sortable" data-sort="dueDate">Due Date <span class="sort-icon"></span></th>
+                            <th class="sortable" data-sort="priority">Priority <span class="sort-icon"></span></th>
+                            <th class="sortable" data-sort="status">Status <span class="sort-icon"></span></th>
+                            <th>Notes</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="taskTableBody">
+                    </tbody>
+                </table>
+                <div class="empty-state" id="emptyTable" style="display:none;">
+                    <p>No tasks yet. Click <strong>+ New Task</strong> to get started.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Kanban View -->
+        <div class="view-container hidden" id="kanbanView">
+            <div class="kanban-group-toggle">
+                <label>Group by:</label>
+                <select id="kanbanGroupBy" class="filter-select">
+                    <option value="status">Status</option>
+                    <option value="client">Client</option>
+                    <option value="project">Project</option>
+                </select>
+            </div>
+            <div class="kanban-board" id="kanbanBoard">
+            </div>
+        </div>
+    </div>
+
+    <!-- Task Modal -->
+    <div class="modal-overlay hidden" id="taskModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="modalTitle">New Task</h2>
+                <button class="modal-close" id="modalClose">&times;</button>
+            </div>
+            <form id="taskForm">
+                <div class="form-row">
+                    <div class="form-group full-width">
+                        <label for="taskName">Task Name *</label>
+                        <input type="text" id="taskName" required placeholder="What needs to be done?">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="taskClient">Client *</label>
+                        <select id="taskClient" required>
+                            <option value="">Select a client...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="taskProject">Project *</label>
+                        <div class="combo-input">
+                            <input type="text" id="taskProject" required placeholder="Select or type new project" list="projectList">
+                            <datalist id="projectList"></datalist>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="taskDueDate">Due Date</label>
+                        <input type="date" id="taskDueDate">
+                    </div>
+                    <div class="form-group">
+                        <label for="taskPriority">Priority</label>
+                        <select id="taskPriority">
+                            <option value="Medium">Medium</option>
+                            <option value="High">High</option>
+                            <option value="Low">Low</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="taskStatus">Status</label>
+                        <select id="taskStatus">
+                            <option value="To Do">To Do</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="Hold">Hold</option>
+                            <option value="Late">Late</option>
+                            <option value="Completed">Completed</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group full-width">
+                        <label for="taskNotes">Notes</label>
+                        <textarea id="taskNotes" rows="5" placeholder="Add any notes, details, or context here..."></textarea>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="saveBtn">Save Task</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal-overlay hidden" id="deleteModal">
+        <div class="modal modal-small">
+            <div class="modal-header">
+                <h2>Delete Task</h2>
+                <button class="modal-close" id="deleteModalClose">&times;</button>
+            </div>
+            <p class="delete-message">Are you sure you want to delete this task? This cannot be undone.</p>
+            <div class="form-actions">
+                <button class="btn btn-secondary" id="cancelDeleteBtn">Cancel</button>
+                <button class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notes Viewer Modal -->
+    <div class="modal-overlay hidden" id="notesModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="notesModalTitle">Task Notes</h2>
+                <button class="modal-close" id="notesModalClose">&times;</button>
+            </div>
+            <div class="notes-content" id="notesContent"></div>
+            <div class="form-actions">
+                <button class="btn btn-secondary" id="closeNotesBtn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Manage Clients Modal -->
+    <div class="modal-overlay hidden" id="clientsModal">
+        <div class="modal modal-small">
+            <div class="modal-header">
+                <h2>Manage Clients</h2>
+                <button class="modal-close" id="clientsModalClose">&times;</button>
+            </div>
+            <div class="clients-manager">
+                <div class="add-client-row">
+                    <input type="text" id="newClientInput" placeholder="New client name...">
+                    <button class="btn btn-primary" id="addClientBtn">Add</button>
+                </div>
+                <ul class="client-list" id="clientListManager"></ul>
+            </div>
+            <div class="form-actions">
+                <button class="btn btn-secondary" id="closeClientsBtn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js');
+        }
+    </script>
+</body>
+</html>
