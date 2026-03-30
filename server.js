@@ -83,6 +83,16 @@ const server = http.createServer(async (req, res) => {
 
     // ===== API ROUTES =====
 
+    // GET /api/version — return last-modified timestamp of tasks.json
+    if (pathname === '/api/version' && req.method === 'GET') {
+        try {
+            const stat = fs.statSync(DATA_FILE);
+            return sendJson(res, 200, { version: stat.mtimeMs });
+        } catch {
+            return sendJson(res, 200, { version: 0 });
+        }
+    }
+
     // GET /api/data — return all tasks and clients
     if (pathname === '/api/data' && req.method === 'GET') {
         return sendJson(res, 200, readData());

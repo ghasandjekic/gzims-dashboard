@@ -962,9 +962,40 @@ document.addEventListener('keydown', e => {
     if (changed) saveTasks(tasks);
 })();
 
+// ===== DESKTOP AUTO-REFRESH =====
+// Poll server every 3 seconds on desktop only (not mobile — saves battery)
+const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+let lastKnownVersion = 0;
+
+async function checkForUpdates() {
+    if (!API_BASE) return;
+    try {
+        const res = await fetch(API_BASE + '/api/version', { signal: AbortSignal.timeout(2000) });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (lastKnownVersion > 0 && data.version !== lastKnownVersion) {
+            // Data changed on server — pull fresh data
+            await syncFromServer();
+            renderAll();
+        }
+        lastKnownVersion = data.version;
+    } catch {}
+}
+
+if (!isMobile && API_BASE) {
+    // Initial version check
+    checkForUpdates();
+    // Poll every 5 seconds
+    setInterval(checkForUpdates, 5000);
+}
+
 // ===== INIT =====
 // Render immediately from localStorage, then try server sync
 renderAll();
 syncFromServer().then(synced => {
-    if (synced) renderAll();
+    if (synced) {
+        renderAll();
+        // Set initial version so polling doesn't trigger an immediate re-render
+        fetch(API_BASE + '/api/version').then(r => r.json()).then(d => { lastKnownVersion = d.version; }).catch(() => {});
+    }
 });
