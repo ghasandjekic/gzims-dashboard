@@ -1,12 +1,12 @@
 const CACHE_NAME = 'gzim-dashboard-v1';
 const ASSETS = [
-    '/',
-    '/index.html',
-    '/styles.css',
-    '/app.js',
-    '/manifest.json',
-    '/icons/icon-192.svg',
-    '/icons/icon-512.svg'
+    './',
+    './index.html',
+    './styles.css',
+    './app.js',
+    './manifest.json',
+    './icons/icon-192.svg',
+    './icons/icon-512.svg'
 ];
 
 // Install — cache core assets
